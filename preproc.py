@@ -1,5 +1,5 @@
 import imageio
-import pandas as pd
+# import pandas as pd
 import numpy as np
 import time
 from PIL import Image
@@ -11,10 +11,10 @@ import os
 # topology:
 #   input layer of 1            - one rgb image
 #   first conv layer of 4       - four convolutions for features: edges, average color, texture detection, size detection
-#   pooling layer of 4          - all four features can be extracted from the same 50x50x3 images but maybe rgb can be converted into black and white instead?
-#   second conv layer of 16     - four new filters to apply to all previous four images which should evolve with weights
-#   second pooling layer of 16  - pool all sixteen images
-#   3 hidden layers of 16       - 3 weighted layers of 16 neurons each with corresponding weights in the weights matrix
+#   pooling layer of 16          - all four features can be extracted from the same 50x50x3 images but maybe rgb can be converted into black and white instead?
+#   second conv layer of 16     - four new filters to apply to all previous 16 images which should evolve with weights
+#   second pooling layer of 64  - pool all 16*4 images
+#   3 hidden layers of 64       - 3 weighted layers of 64 neurons each with corresponding weights in the weights matrix
 #   output layer of 131         - 131 output neurons can be stored as list[] * 131; each output neuron should receive input from each neuron in the final hidden layer
 
 class CNN:
@@ -39,6 +39,7 @@ class CNN:
         # temp dir for testing
         if not os.path.exists(os.getcwd() + '/out'):
             os.mkdir(os.getcwd() + '/out')
+            os.chmod(os.getcwd() + '/out', 0o777)
 
         # calc file size of train folder
         train_count = sum(len(files) for _, _, files in os.walk(path + '/Train'))
@@ -61,25 +62,37 @@ class CNN:
                     p = p.replace('Train', '')
                     p = p.replace(str(file), '')
                     label = p.replace('\\', '')
-                    train_set.append([root + '/' + file, self.classes.index(label), file])
+                    # print([root + "\\" + file, self.classes.index(label), file])
+                    train_set.append([root + "\\" + file, self.classes.index(label), file])
+
             if 'Test' in root:
                 for file in files:
                     p = root.replace(path, '')
                     p = p.replace('Test', '')
                     p = p.replace(str(file), '')
                     label = p.replace('\\', '')
-                    test_set.append([root + '/' + file, self.classes.index(label), file])
-        f = open("C:/Users/Owner/Desktop/list.txt", "a")
-        for x in lizt:
-            f.write("\"" + x + "\", ")
-        f.close()
+                    test_set.append([root + "\\" + file, self.classes.index(label), file])
+
         print(len(lizt))
         return train_set, test_set
 
     def genSlices(self, raw_im):
         slices = []
+        quadrant = []
         # slices[0-3] generate and store 4 50x50x3 images from all quadrants of raw_im (RGB so there are 3 color channels)
-        # TODO implement slice function - should be similar to code in fit function
+        # slice image into four quadrants
+        quadrant.append(raw_im[:50,:50])
+        quadrant.append(raw_im[:50, 50:])
+        quadrant.append(raw_im[50:,:50])
+        quadrant.append(raw_im[50:,50:])
+
+        for p in range(4):
+            dt = np.dtype('uint8')
+            # pix_fin = np.reshape(quadrant[p], (50, 50, 3))
+            o_name = "out\\slice_" + str(p) + ".jpg"
+            imageio.imwrite(o_name, quadrant[p])
+            slices.append(quadrant[p])
+
         return slices
 
     def relu(self, x):
@@ -107,6 +120,7 @@ class CNN:
         # generate weights randomly, 16 weights for each layer
         weights = np.random.random((self.layers, 16))
         print(weights)
+        # exit(0)
         for e in range(epochs):
             x_data = []
             start = time.time()
@@ -129,11 +143,11 @@ class CNN:
                         if x > 40 or x < -40:
                             edge[p * 1] = (255, 0, 255)
 
-                dt = np.dtype('uint8', 'uint8', 'uint8')
+                dt = np.dtype('uint8')
                 pix_arr = np.array(edge, dtype=dt)
                 pix_fin = np.reshape(pix_arr, (100, 100, 3))
-                # o_name = "out/out" + str(i) + ".jpg"
-                # imageio.imwrite(o_name, pix_fin)
+                o_name = "out/out0.jpg"
+                imageio.imwrite(o_name, pix_fin)
                 im_slices = self.genSlices(pix_fin)
                 weights = self.train(im_slices, weights)
 
@@ -144,4 +158,5 @@ class CNN:
                     start = time.time()
                     # x_data.clear()
 
-p = CNN(2,5)
+
+p = CNN(3,5)
