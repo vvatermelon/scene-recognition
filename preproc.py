@@ -1,37 +1,51 @@
 # import imageio
-# import pandas as pd
 import numpy as np
 import time
 from PIL import Image
 import pygit2
-# import copy
 import os
+import math
 
 
 # topology:
 #   input layer of 1              - one rgb image
-#   first conv layer of 4         - four convolutions for features
-#   pooling layer of 4            - all four features can be extracted from the same 50x50x3 images but maybe rgb can be converted into black and white instead?
-#   second conv layer of 16       - four new filters to apply to all previous 16 images which should evolve with weights
-#   second pooling layer of 16    - pool all 16*4 images
-#   3 hidden layers of 16         - 3 weighted layers of 16 neurons each with corresponding weights in the weights matrix
-#   output layer of 131           - 131 output neurons can be stored as list[] * 131; each output neuron should receive input from each neuron in the final hidden layer
+#   first conv layer of 16        - four convolutions for features
+#   pooling layer of 16           - max pooling layer downscales 50x50 to 25x25
+#   second conv layer of 64       - four new filters to apply to all previous 16 images which should evolve with weights
+#   second pooling layer of 64    - max pooling layer downscales 25x25 to 5x5
+#   3 hidden layers of 16         - 3 strongly connected layers of 16 neurons
+#   output layer of 131           - 131 output neurons
 
 class CNN:
-    def __init__(self, layers, epochs):
-        self.classes = ["Apple Braeburn", "Apple Crimson Snow", "Apple Golden 1", "Apple Golden 2", "Apple Golden 3", "Apple Granny Smith", "Apple Pink Lady", "Apple Red 1", "Apple Red 2", "Apple Red 3", "Apple Red Delicious", "Apple Red Yellow 1", "Apple Red Yellow 2", "Apricot", "Avocado", "Avocado ripe", "Banana", "Banana Lady Finger", "Banana Red", "Beetroot", "Blueberry", "Cactus fruit", "Cantaloupe 1", "Cantaloupe 2", "Carambula", "Cauliflower", "Cherry 1", "Cherry 2", "Cherry Rainier", "Cherry Wax Black", "Cherry Wax Red", "Cherry Wax Yellow", "Chestnut", "Clementine", "Cocos", "Corn", "Corn Husk", "Cucumber Ripe", "Cucumber Ripe 2", "Dates", "Eggplant", "Fig", "Ginger Root", "Granadilla", "Grape Blue", "Grape Pink", "Grape White", "Grape White 2", "Grape White 3", "Grape White 4", "Grapefruit Pink", "Grapefruit White", "Guava", "Hazelnut", "Huckleberry", "Kaki", "Kiwi", "Kohlrabi", "Kumquats", "Lemon", "Lemon Meyer", "Limes", "Lychee", "Mandarine", "Mango", "Mango Red", "Mangostan", "Maracuja", "Melon Piel de Sapo", "Mulberry", "Nectarine", "Nectarine Flat", "Nut Forest", "Nut Pecan", "Onion Red", "Onion Red Peeled", "Onion White", "Orange", "Papaya", "Passion Fruit", "Peach", "Peach 2", "Peach Flat", "Pear", "Pear 2", "Pear Abate", "Pear Forelle", "Pear Kaiser", "Pear Monster", "Pear Red", "Pear Stone", "Pear Williams", "Pepino", "Pepper Green", "Pepper Orange", "Pepper Red", "Pepper Yellow", "Physalis", "Physalis with Husk", "Pineapple", "Pineapple Mini", "Pitahaya Red", "Plum", "Plum 2", "Plum 3", "Pomegranate", "Pomelo Sweetie", "Potato Red", "Potato Red Washed", "Potato Sweet", "Potato White", "Quince", "Rambutan", "Raspberry", "Redcurrant", "Salak", "Strawberry", "Strawberry Wedge", "Tamarillo", "Tangelo", "Tomato 1", "Tomato 2", "Tomato 3", "Tomato 4", "Tomato Cherry Red", "Tomato Heart", "Tomato Maroon", "Tomato not Ripened", "Tomato Yellow", "Walnut", "Watermelon"]
+    # Creates a CNN that operates on a certain number of images from the train and test datasets.
+    def __init__(self, layers, epochs, train_sample_size=None, test_sample_size=None):
+        self.classes = ['Apple Braeburn', 'Apricot', 'Avocado', 'Banana', 'Beetroot', 'Blueberry', 'Cactus fruit', 'Cantaloupe 1', 'Carambula', 'Cauliflower', 'Cherry 1', 'Chestnut', 'Clementine', 'Cocos', 'Corn', 'Cucumber Ripe', 'Dates', 'Eggplant', 'Fig', 'Ginger Root', 'Granadilla', 'Grape Blue', 'Grapefruit Pink', 'Guava', 'Hazelnut', 'Huckleberry', 'Kaki', 'Kiwi', 'Kohlrabi', 'Kumquats', 'Lemon', 'Limes', 'Lychee', 'Mandarine', 'Mango', 'Maracuja', 'Melon Piel de Sapo', 'Mulberry', 'Nectarine', 'Nut Forest', 'Onion Red', 'Orange', 'Papaya', 'Passion Fruit', 'Peach', 'Pear', 'Pepino', 'Pepper Green', 'Physalis', 'Pineapple', 'Pitahaya Red', 'Plum', 'Pomegranate', 'Pomelo Sweetie', 'Potato Red', 'Quince', 'Rambutan', 'Raspberry', 'Redcurrant', 'Salak', 'Strawberry', 'Tamarillo', 'Tangelo', 'Tomato 1', 'Walnut', 'Watermelon']
         self.neurons = 16
         self.layers = layers
-        self.network = np.zeros((self.layers,16))
-        train_count, test_count, path = self.getRepo()
-        train_data, test_data = self.getData(path)
-        self.fit(train_count, train_data, epochs)
+        self.filters = [np.random.randint(-10, 10, (3, 3)) for _ in range(8)]
+        self.network = np.zeros((self.layers, 16))
+        self.error = np.zeros((self.layers-1, 16))
+        self.weights = np.random.uniform(-0.3, 0.3, (self.layers-1, 256))
+        self.out_weights = np.random.uniform(-0.3, 0.3, 1056)
+        self.out_error = np.zeros(66)
+        path = self.getRepo()
 
+        if train_sample_size is None:
+            train_sample_size = -1
+        if test_sample_size is None:
+            test_sample_size = -1
+
+        train_data, test_data = self.getData(path, train_sample_size, test_sample_size)
+        self.fit(len(train_data), train_data, epochs)
+        self.predict(len(test_data), test_data)
+
+    # Downloads dataset to local working directory.
+    # Returns local file path of data set.
     def getRepo(self):
         path = os.getcwd() + '/Fruit'
         if os.path.exists(path):
             # do nothing
-            print("Local repo already exists.")
+            print("Local repo exists.")
         else:
             cloned = pygit2.clone_repository("https://github.com/ReeseReynolds/ML-Testing", path, bare=False,
                                              repository=None, remote=None, checkout_branch=None, callbacks=None)
@@ -41,31 +55,32 @@ class CNN:
             os.mkdir(os.getcwd() + '/out')
             os.chmod(os.getcwd() + '/out', 0o777)
 
-        # calc file size of train folder
-        train_count = sum(len(files) for _, _, files in os.walk(path + '/Train'))
-        print("Training set size: ", train_count)
+        return path
 
-        # calc file size of test folder
-        test_count = sum(len(files) for _, _, files in os.walk(path + '/Test'))
-        print("Test set size: ", test_count)
-        return train_count, test_count, path
-
-    def getData(self, path):
+    # Stores given numbers of images from the training/test data sets
+    # Returns lists containing training and test samples.
+    def getData(self, path, size_train, size_test):
         # gather all class labels and file names
         train_set = []
         test_set = []
         for root, dirs, files in os.walk(path):
             if 'Train' in root:
+                i = 0
                 for file in files:
+                    if i == size_train:
+                        break
+                    i += 1
                     p = root.replace(path, '')
                     p = p.replace('Train', '')
                     p = p.replace(str(file), '')
                     label = p.replace('\\', '')
-                    # print([root + "\\" + file, self.classes.index(label), file])
                     train_set.append([root + "\\" + file, self.classes.index(label), file])
-
             if 'Test' in root:
+                i = 0
                 for file in files:
+                    if i == size_test:
+                        break
+                    i += 1
                     p = root.replace(path, '')
                     p = p.replace('Test', '')
                     p = p.replace(str(file), '')
@@ -74,6 +89,8 @@ class CNN:
 
         return train_set, test_set
 
+    # Slices given image into four 1/4 size quadrants.
+    # Returns list of 4 quadrants.
     def genSlices(self, raw_im):
         slices = []
         # slices[0-3] generate and store 4 50x50x3 images from all quadrants of raw_im (RGB so there are 3 color channels)
@@ -89,10 +106,36 @@ class CNN:
 
         return slices
 
+    # Simple ReLU function
     def ReLU(self, x):
-        # TODO simple max ReLU function to be called after each layer
         return np.maximum(0, x)
 
+    # Simple sigmoid function bound to the range (0,1)
+    def sigmoid(self, x):
+        x = 1 / (1 + np.exp(-x))
+        x = np.minimum(x, 0.9999)
+        x = np.maximum(x, 0.0001)
+        return x
+
+    # Driver to apply ReLU to all pixels in the input images
+    # Returns same list with ReLU applied to all members.
+    def convReLU(self, rgb_ims):
+        imgs_final = []
+        for i in range(0, len(rgb_ims), 4):
+            group = rgb_ims[i:i+4]
+            for img in group:
+                t_img = []
+                for row in img:
+                    t_row = []
+                    for pix in row:
+                        t_pix = [self.ReLU(pix[i]) for i in range(len(pix))]
+                        t_row.append(t_pix)
+                    t_img.append(t_row)
+                imgs_final.append(t_img)
+        return imgs_final
+
+    # Applies four convolution filters to each image in input list and maintains image size by using stride of 1.
+    # Returns list of len(rgb_ims) * 4 convoluted images.
     def conv(self, rgb_ims, filters, size):
         # pool will be filled with groups of four:
         # each group consists of one base image with four unique filters applied
@@ -115,21 +158,8 @@ class CNN:
             # imageio.imwrite(o_name, pool[i])
         return pool
 
-    def convReLU(self, rgb_ims):
-        imgs_final = []
-        for i in range(0, len(rgb_ims), 4):
-            group = rgb_ims[i:i+4]
-            for img in group:
-                t_img = []
-                for row in img:
-                    t_row = []
-                    for pix in row:
-                        t_pix = [self.ReLU(pix[i]) for i in range(len(pix))]
-                        t_row.append(t_pix)
-                    t_img.append(t_row)
-                imgs_final.append(t_img)
-        return imgs_final
-
+    # Pools filtered versions of the same image into a single image and applies max pooling algorithm to the result.
+    # Returns list of max pooled images
     def pool(self, rgb_ims, size, n):
         # max pooling algorithm
         pool = []
@@ -163,24 +193,96 @@ class CNN:
                     fin.append(fin_row)
                 temp_pool.append(fin)
 
-            # pool group together into a single image
-            # print(np.shape(temp_pool[0]))
-            rs = np.add(temp_pool[0], temp_pool[1])
-            rs2 = np.add(temp_pool[2], temp_pool[3])
-            fin_img = np.add(rs, rs2)
-
-            fin_img = np.array(fin_img, dtype=dt)
-            pix_fin = np.reshape(fin_img, (int(size/n), int(size/n), 3))
-            # o_name = "out/pool_test.jpg"
-            # imageio.imwrite(o_name, pix_fin)
-
-            pool.append(pix_fin)
+            for fin_img in temp_pool:
+                fin_img = np.array(fin_img, dtype=dt)
+                pix_fin = np.reshape(fin_img, (int(size/n), int(size/n), 3))
+                pool.append(pix_fin)
 
         return pool
 
-    def train(self, slices, weights, filters):
+    # Runs input images through NN
+    # Returns calculated output predictions
+    def dnn(self, rgb_ims):
+        for i in range(len(self.network)):
+            for j in range(16):
+                pred = 0
+                # input layer
+                if i == 0:
+                    for im in rgb_ims[(j*4):(j*4)+4]:
+                        im = np.ndarray.flatten(im)
+                        pred += sum([x for x in im])/len(im)
+
+                    self.network[i][j] = self.sigmoid(math.sqrt(pred))
+                # hidden layers
+                else:
+                    summ = 0
+                    for k in range(16):
+                        summ += self.network[i-1][k] * self.weights[i-1][j*16+k]
+                    self.network[i][j] = self.sigmoid(summ)
+        out = []
+        for i in range(66):
+            summ = 0
+            for j in range(16):
+                # print(self.network[-1][j])
+                summ += self.network[-1][j] * self.out_weights[i*16+j]
+            out.append(self.sigmoid(summ))
+        print("Prediction: ", ["%.2f" % o for o in out])
+        return out
+
+    # derivative of sigmoid function used for calculating error
+    def derivative(self, x):
+        return x * (1.0 - x)
+
+    # Backpropagation of errors and updating weights
+    def backpropagate(self, calc, actual):
+        lr = 0.3
+
+        # recalc weights for output layer
+        for i in range(len(calc)):
+            self.out_error[i] = calc[i] - actual[i]
+            for j in range(16):
+                self.out_weights[i*16+j] = self.out_weights[i*16+j] - lr * self.out_error[i] * self.network[-1][j]
+
+        # recalc weights for hidden layers
+        for i in reversed(range(len(self.weights))):
+            for j in range(16):
+                summ = 0
+                if i == len(self.weights)-1:
+                    for k in range(16):
+                        for l in range(66):
+                            summ += self.weights[i][j*16+k] * self.out_error[l] * self.derivative(self.network[i][j])
+                    self.error[i][j] = summ
+                else:
+                    for k in range(16):
+                        for q in range(16):
+                            summ += self.weights[i][j*16 + k] * self.error[i+1][q] * self.derivative(self.network[i][j])
+                    self.error[i][j] = summ
+                self.weights[i][j*16+k] = self.weights[i][j*16+k] - lr * self.error[i][j] * self.network[i][j]
+
+    # Predicts most likely output class for each image in input set
+    def predict(self, file_count, img_set):
+        print("Test File count: ", file_count)
+        for i in range(file_count):
+            stt = time.time()
+            fname = img_set[i][0]
+            actual = img_set[i][1]
+            im = Image.open(fname, 'r')
+            pix = list(im.getdata())
+            im.close()
+
+            dt = np.dtype('uint8')
+            pix_arr = np.array(pix, dtype=dt)
+            pix_fin = np.reshape(pix_arr, (100, 100, 3))
+
+            im_slices = self.genSlices(pix_fin)
+            prediction = self.test(im_slices, self.filters)
+            print("Time for prediction ", i, time.time() - stt)
+            print("Prediction: ", self.classes[prediction])
+            print("Actual: ", self.classes[actual])
+
+    # Processes input images through two convolution and pooling layers, and a NN.
+    def train(self, slices, filters, actual):
         # create all layers, some should require extra parameters to be implemented
-        # TODO implement backpropagation
         conv_out = self.conv(slices, filters[:4], 50)
         ReLU_out = self.convReLU(conv_out)
         pool1_out = self.pool(ReLU_out, 50, 2)
@@ -190,20 +292,37 @@ class CNN:
         pool2_out = self.pool(ReLU_out, 25, 5)
 
         # dnn strongly connected layers
+        # self.weights, compare actual with predicted
+        out = self.dnn(pool2_out)
+        act = np.zeros(66)
+        act[actual] = 1
+        self.backpropagate(out, act)
 
-        return weights
+    # Run test image through CNN and compute predicted outputs.
+    # Return most likely output index.
+    def test(self, slices, filters):
+        # create all layers, some should require extra parameters to be implemented
+        conv_out = self.conv(slices, filters[:4], 50)
+        ReLU_out = self.convReLU(conv_out)
+        pool1_out = self.pool(ReLU_out, 50, 2)
 
+        conv_out = self.conv(pool1_out, filters[4:], 25)
+        ReLU_out = self.convReLU(conv_out)
+        pool2_out = self.pool(ReLU_out, 25, 5)
+
+        out = self.dnn(pool2_out)
+        rs = max(out)
+        return out.index(rs)
+
+    # Generates convolution filters and trains model over all images for every epoch.
     def fit(self, file_count, img_set, epochs):
-        # loads and trains with 10k images at a time until all images have been iterated through
-        # generate weights randomly, 16 weights for each layer
-        weights = np.random.random((self.layers, 256))
-        filters = [np.random.randint(-10, 10, (3, 3)) for _ in range(8)]
+        print("Train File count: ", len(img_set))
         for e in range(epochs):
             print("Beginning epoch ", e)
             start = time.time()
             for i in range(file_count):
-                # get image
                 fname = img_set[i][0]
+                actual = img_set[i][1]
                 im = Image.open(fname, 'r')
                 pix = list(im.getdata())
                 im.close()
@@ -212,17 +331,10 @@ class CNN:
                 pix_arr = np.array(pix, dtype=dt)
                 pix_fin = np.reshape(pix_arr, (100, 100, 3))
 
-                # o_name = "out/out0.jpg"
-                # imageio.imwrite(o_name, pix_fin)
                 im_slices = self.genSlices(pix_fin)
-                weights = self.train(im_slices, weights, filters)
-
-
-                if (i+1) % 11282 == 0 and (i+1) != 0:
-                    print("Group of 10k images processed")
-                    print(time.time() - start, " seconds for i = ", i)
-                    start = time.time()
+                self.train(im_slices, self.filters, actual)
+            print("Epoch ", e, " finished: ", start - time.time())
 
 st = time.time()
-p = CNN(3,1)
+p = CNN(3,1,27,5)
 print("Total execution time: ", time.time()-st)
