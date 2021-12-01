@@ -5,7 +5,7 @@ from PIL import Image
 import pygit2
 import os
 import math
-
+import random
 
 # topology:
 #   input layer of 1              - one rgb image
@@ -235,7 +235,7 @@ class CNN:
 
     # Backpropagation of errors and updating weights
     def backpropagate(self, calc, actual):
-        lr = 0.3
+        lr = 0.03
 
         # recalc weights for output layer
         for i in range(len(calc)):
@@ -276,7 +276,7 @@ class CNN:
 
             im_slices = self.genSlices(pix_fin)
             prediction = self.test(im_slices, self.filters)
-            print("Time for prediction ", i, time.time() - stt)
+            print("Time for prediction ", i, ": ", time.time() - stt)
             print("Prediction: ", self.classes[prediction])
             print("Actual: ", self.classes[actual])
 
@@ -294,6 +294,10 @@ class CNN:
         # dnn strongly connected layers
         # self.weights, compare actual with predicted
         out = self.dnn(pool2_out)
+        rs = max(out)
+        print("Train: ", self.classes[out.index(rs)])
+        print("Actual: ", self.classes[actual])
+
         act = np.zeros(66)
         act[actual] = 1
         self.backpropagate(out, act)
@@ -317,12 +321,16 @@ class CNN:
     # Generates convolution filters and trains model over all images for every epoch.
     def fit(self, file_count, img_set, epochs):
         print("Train File count: ", len(img_set))
+        # randomize the order which images will be picked for training
+        im_idx = list(range(file_count))
+        random.shuffle(im_idx)
+
         for e in range(epochs):
             print("Beginning epoch ", e)
             start = time.time()
             for i in range(file_count):
-                fname = img_set[i][0]
-                actual = img_set[i][1]
+                fname = img_set[im_idx[i]][0]
+                actual = img_set[im_idx[i]][1]
                 im = Image.open(fname, 'r')
                 pix = list(im.getdata())
                 im.close()
@@ -336,5 +344,5 @@ class CNN:
             print("Epoch ", e, " finished: ", start - time.time())
 
 st = time.time()
-p = CNN(3,1,27,5)
+p = CNN(3,1,8,5)
 print("Total execution time: ", time.time()-st)
