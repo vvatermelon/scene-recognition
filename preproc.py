@@ -1,4 +1,3 @@
-# import imageio
 import numpy as np
 import time
 from PIL import Image
@@ -13,8 +12,8 @@ import random
 #   pooling layer of 16           - max pooling layer downscales 50x50 to 25x25
 #   second conv layer of 64       - four new filters to apply to all previous 16 images which should evolve with weights
 #   second pooling layer of 64    - max pooling layer downscales 25x25 to 5x5
-#   3 hidden layers of 16         - 3 strongly connected layers of 16 neurons
-#   output layer of 131           - 131 output neurons
+#   n hidden layers of 16         - n strongly connected layers of 16 neurons
+#   output layer of 66            - 66 output neurons
 
 class CNN:
     # Creates a CNN that operates on a certain number of images from the train and test datasets.
@@ -47,13 +46,8 @@ class CNN:
             # do nothing
             print("Local repo exists.")
         else:
-            cloned = pygit2.clone_repository("https://github.com/ReeseReynolds/ML-Testing", path, bare=False,
+            pygit2.clone_repository("https://github.com/ReeseReynolds/ML-Testing", path, bare=False,
                                              repository=None, remote=None, checkout_branch=None, callbacks=None)
-
-        # temp dir for testing
-        if not os.path.exists(os.getcwd() + '/out'):
-            os.mkdir(os.getcwd() + '/out')
-            os.chmod(os.getcwd() + '/out', 0o777)
 
         return path
 
@@ -99,11 +93,6 @@ class CNN:
         slices.append(raw_im[:50, 50:])
         slices.append(raw_im[50:,:50])
         slices.append(raw_im[50:,50:])
-
-        # for p in range(4):
-            # o_name = "out\\slice_" + str(p) + ".jpg"
-            # imageio.imwrite(o_name, slices[p])
-
         return slices
 
     # Simple ReLU function
@@ -152,10 +141,6 @@ class CNN:
 
                 filtered_im = np.array(filtered_im, dtype=dt)
                 pool.append(np.reshape(filtered_im, (size, size, 3)))
-
-        # for i in range(len(pool)):
-            # o_name = "out\\conv_" + str(i) + ".jpg"
-            # imageio.imwrite(o_name, pool[i])
         return pool
 
     # Pools filtered versions of the same image into a single image and applies max pooling algorithm to the result.
@@ -223,7 +208,6 @@ class CNN:
         for i in range(66):
             summ = 0
             for j in range(16):
-                # print(self.network[-1][j])
                 summ += self.network[-1][j] * self.out_weights[i*16+j]
             out.append(self.sigmoid(summ))
         print("Prediction: ", ["%.2f" % o for o in out])
@@ -263,7 +247,6 @@ class CNN:
     def predict(self, file_count, img_set):
         print("Test File count: ", file_count)
         for i in range(file_count):
-            stt = time.time()
             fname = img_set[i][0]
             actual = img_set[i][1]
             im = Image.open(fname, 'r')
@@ -276,7 +259,6 @@ class CNN:
 
             im_slices = self.genSlices(pix_fin)
             prediction = self.test(im_slices, self.filters)
-            print("Time for prediction ", i, ": ", time.time() - stt)
             print("Prediction: ", self.classes[prediction])
             print("Actual: ", self.classes[actual])
 
@@ -292,7 +274,6 @@ class CNN:
         pool2_out = self.pool(ReLU_out, 25, 5)
 
         # dnn strongly connected layers
-        # self.weights, compare actual with predicted
         out = self.dnn(pool2_out)
         rs = max(out)
         print("Train: ", self.classes[out.index(rs)])
