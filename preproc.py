@@ -21,6 +21,7 @@ class CNN:
         self.classes = ['Apple Braeburn', 'Apricot', 'Avocado', 'Banana', 'Beetroot', 'Blueberry', 'Cactus fruit', 'Cantaloupe 1', 'Carambula', 'Cauliflower', 'Cherry 1', 'Chestnut', 'Clementine', 'Cocos', 'Corn', 'Cucumber Ripe', 'Dates', 'Eggplant', 'Fig', 'Ginger Root', 'Granadilla', 'Grape Blue', 'Grapefruit Pink', 'Guava', 'Hazelnut', 'Huckleberry', 'Kaki', 'Kiwi', 'Kohlrabi', 'Kumquats', 'Lemon', 'Limes', 'Lychee', 'Mandarine', 'Mango', 'Maracuja', 'Melon Piel de Sapo', 'Mulberry', 'Nectarine', 'Nut Forest', 'Onion Red', 'Orange', 'Papaya', 'Passion Fruit', 'Peach', 'Pear', 'Pepino', 'Pepper Green', 'Physalis', 'Pineapple', 'Pitahaya Red', 'Plum', 'Pomegranate', 'Pomelo Sweetie', 'Potato Red', 'Quince', 'Rambutan', 'Raspberry', 'Redcurrant', 'Salak', 'Strawberry', 'Tamarillo', 'Tangelo', 'Tomato 1', 'Walnut', 'Watermelon']
         self.neurons = 16
         self.layers = layers
+        self.testAcc = 0
         self.filters = [np.random.randint(-10, 10, (3, 3)) for _ in range(8)]
         self.network = np.zeros((self.layers, 16))
         self.error = np.zeros((self.layers-1, 16))
@@ -261,6 +262,8 @@ class CNN:
             prediction = self.test(im_slices, self.filters)
             print("Prediction: ", self.classes[prediction])
             print("Actual: ", self.classes[actual])
+            if prediction == actual:
+                self.testAcc += 1/file_count
 
     # Processes input images through two convolution and pooling layers, and a NN.
     def train(self, slices, filters, actual):
@@ -322,8 +325,13 @@ class CNN:
 
                 im_slices = self.genSlices(pix_fin)
                 self.train(im_slices, self.filters, actual)
-            print("Epoch ", e, " finished: ", start - time.time())
+            print("Epoch ", e, " finished: ", time.time() - start)
 
-st = time.time()
-p = CNN(3,1,8,5)
-print("Total execution time: ", time.time()-st)
+
+if __name__  == '__main__':
+    st = time.time()
+    # initialize CNN with parameters (layers, epochs, optional:train_sample_size, optional: test_sample_size)
+    # sample parameters for a ~5.5 hour test
+    p = CNN(6,2,10,10)
+    print("Test Accuracy: ", p.testAcc)
+    print("Total execution time: ", time.time()-st)
